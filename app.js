@@ -62,4 +62,17 @@ app.post("/users/password/update", async (req, res) => {
   utils.updatePassword(bodyData.username, bodyData.password, bodyData.newPassword, res);
 });
 
+app.post("/upload/track", async (req, res) => {
+  utils.uploadTrack(req, res);
+});
+
+app.get("/track/:trackID", async (req, res) => {
+  let trackID = req.params.trackID;
+  await utils.streamSoundTrack(req, res, trackID);
+});
+
+app.get("/tracks", async (req, res) => {
+  utils.fetchAllSoundTracks(req, res);
+})
+
 module.exports = app;
