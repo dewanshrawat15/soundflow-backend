@@ -63,12 +63,26 @@ app.post("/users/password/update", async (req, res) => {
 });
 
 app.post("/upload/track", async (req, res) => {
-  utils.uploadTrack(req, res);
+  const appSecret = req.headers.app_secret;
+  if(appSecret.length === 32){
+    utils.uploadTrack(req, res, appSecret);
+  } else {
+    res.status(400).json({
+      "message": "APP Secret incorrect format"
+    });
+  }
 });
 
 app.get("/track/:trackID", async (req, res) => {
-  let trackID = req.params.trackID;
-  await utils.streamSoundTrack(req, res, trackID);
+  const appSecret = req.headers.app_secret;
+  if(appSecret.length === 32){
+    let trackID = req.params.trackID;
+    utils.streamSoundTrack(req, res, trackID, appSecret);
+  } else {
+    res.status(400).json({
+      "message": "APP Secret incorrect format"
+    });
+  }
 });
 
 app.get("/tracks", async (req, res) => {

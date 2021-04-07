@@ -192,86 +192,109 @@ const deleteAuthTokens = async () => {
     await AuthToken.remove();
 }
 
-const uploadTrack = async (req, res) => {
-    const storage = multer.memoryStorage();
-    const upload = multer({
-        storage: storage,
-        limits: {
-            fields: 1,
-            fileSize: 6000000,
-            files: 1,
-            parts: 2
+const uploadTrack = async (req, res, appSecret) => {
+    if(appSecret === process.env.APP_SECRET){
+        const storage = multer.memoryStorage();
+        const upload = multer({
+            storage: storage,
+            limits: {
+                fields: 1,
+                fileSize: 6000000,
+                files: 1,
+                parts: 2
+            }
+        });
+        upload.single('track')(req, res, (err) => {
+            if (err) {
+                return res.status(400).json({ message: "Upload Request Validation Failed" });
+            } else if (!req.body.name) {
+                return res.status(400).json({ message: "No track name in request body" });
+            }
+            let trackName = req.body.name;
+            const readableTrackStream = new Readable();
+            readableTrackStream.push(req.file.buffer);
+            readableTrackStream.push(null);
+            let bucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db, {
+                bucketName: "tracks"
+            });
+            let uploadStream = bucket.openUploadStream(trackName);
+            let id = uploadStream.id;
+            readableTrackStream.pipe(uploadStream);
+
+            uploadStream.on('error', () => {
+                return res.status(500).json({ message: "Error uploading file" });
+            });
+
+            uploadStream.on('finish', () => {
+                return res.status(201).json({ message: "File uploaded successfully", "_id": id });
+            });
+        });
+    } else {
+        res.status(400).json({
+            "message": "Wrong app secret"
+        });
+    }
+}
+
+const streamSoundTrack = async (req, res, _trackID, appSecret) => {
+    if(appSecret === process.env.APP_SECRET){
+        let trackID;
+        try {
+            trackID = new ObjectID(_trackID);
+        } catch (err) {
+            return res.status(400).json({ message: "Invalid trackID in URL parameter. Must be a single String of 12 bytes or a string of 24 hex characters" }); 
         }
-    });
-    upload.single('track')(req, res, (err) => {
-        if (err) {
-            return res.status(400).json({ message: "Upload Request Validation Failed" });
-        } else if (!req.body.name) {
-            return res.status(400).json({ message: "No track name in request body" });
-        }
-        let trackName = req.body.name;
-        const readableTrackStream = new Readable();
-        readableTrackStream.push(req.file.buffer);
-        readableTrackStream.push(null);
+        res.set('content-type', 'audio/mp3');
+        res.set('accept-ranges', 'bytes');
         let bucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db, {
             bucketName: "tracks"
         });
-        let uploadStream = bucket.openUploadStream(trackName);
-        let id = uploadStream.id;
-        readableTrackStream.pipe(uploadStream);
-
-        uploadStream.on('error', () => {
-            return res.status(500).json({ message: "Error uploading file" });
+        let downloadStream = bucket.openDownloadStream(trackID);
+        downloadStream.on('data', (chunk) => {
+            res.write(chunk);
         });
-
-        uploadStream.on('finish', () => {
-            return res.status(201).json({ message: "File uploaded successfully", "_id": id });
+        downloadStream.on('error', () => {
+            res.sendStatus(404);
         });
-    })
-}
-
-const streamSoundTrack = async (req, res, _trackID) => {
-    let trackID;
-    try {
-        trackID = new ObjectID(_trackID);
-    } catch (err) {
-        return res.status(400).json({ message: "Invalid trackID in URL parameter. Must be a single String of 12 bytes or a string of 24 hex characters" }); 
+        downloadStream.on('end', () => {
+            res.end();
+        });
+    } else {
+        res.status(400).json({
+            "message": "Wrong app secret"
+        });
     }
-    res.set('content-type', 'audio/mp3');
-    res.set('accept-ranges', 'bytes');
-    let bucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db, {
-        bucketName: "tracks"
-    });
-    let downloadStream = bucket.openDownloadStream(trackID);
-    downloadStream.on('data', (chunk) => {
-        res.write(chunk);
-    });
-    downloadStream.on('error', () => {
-        res.sendStatus(404);
-    });
-    downloadStream.on('end', () => {
-        res.end();
-    });
 }
 
 const fetchAllSoundTracks = async (req, res) => {
-    const collection = mongoose.connection.db.collection("tracks.files");
-    collection.find({}, function(err, data){
-        if(err){
-            res.status(400).json({
-                "message": err
-            });
-        } else {
-            soundTracks = [];
-            data.forEach(item => {
-                soundTracks.push(item);
-            }).then(() => {
-                res.status(200).json({
-                    "message": soundTracks
+    const appSecret = req.headers.app_secret;
+    if(appSecret === process.env.APP_SECRET){
+        const collection = mongoose.connection.db.collection("tracks.files");
+        collection.find({}, function(err, data){
+            if(err){
+                res.status(400).json({
+                    "message": err
                 });
-            });
-        }
-    });
+            } else {
+                const host = req.headers.host;
+                soundTracks = [];
+                const subPath = "/track/";
+                const baseUrl = host + subPath;
+                data.forEach(item => {
+                    const soundTrackUrl = baseUrl + item._id;
+                    soundTracks.push(soundTrackUrl);
+                }).then(() => {
+                    res.status(200).json({
+                        "message": soundTracks
+                    });
+                });
+            }
+        });
+    } else {
+        res.status(400).json({
+            "message": "Invalid app secret"
+        });
+    }
 }
 
 exports.createNewUser = createNewUser;
