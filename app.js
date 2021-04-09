@@ -74,15 +74,8 @@ app.post("/upload/track", async (req, res) => {
 });
 
 app.get("/track/:trackID", async (req, res) => {
-  const appSecret = req.headers.app_secret;
-  if(appSecret.length === 32){
-    let trackID = req.params.trackID;
-    utils.streamSoundTrack(req, res, trackID, appSecret);
-  } else {
-    res.status(400).json({
-      "message": "APP Secret incorrect format"
-    });
-  }
+  let trackID = req.params.trackID;
+  utils.streamSoundTrack(req, res, trackID);
 });
 
 app.get("/tracks", async (req, res) => {

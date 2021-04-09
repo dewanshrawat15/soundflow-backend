@@ -236,34 +236,28 @@ const uploadTrack = async (req, res, appSecret) => {
     }
 }
 
-const streamSoundTrack = async (req, res, _trackID, appSecret) => {
-    if(appSecret === process.env.APP_SECRET){
-        let trackID;
-        try {
-            trackID = new ObjectID(_trackID);
-        } catch (err) {
-            return res.status(400).json({ message: "Invalid trackID in URL parameter. Must be a single String of 12 bytes or a string of 24 hex characters" }); 
-        }
-        res.set('content-type', 'audio/mp3');
-        res.set('accept-ranges', 'bytes');
-        let bucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db, {
-            bucketName: "tracks"
-        });
-        let downloadStream = bucket.openDownloadStream(trackID);
-        downloadStream.on('data', (chunk) => {
-            res.write(chunk);
-        });
-        downloadStream.on('error', () => {
-            res.sendStatus(404);
-        });
-        downloadStream.on('end', () => {
-            res.end();
-        });
-    } else {
-        res.status(400).json({
-            "message": "Wrong app secret"
-        });
+const streamSoundTrack = async (req, res, _trackID) => {
+    let trackID;
+    try {
+        trackID = new ObjectID(_trackID);
+    } catch (err) {
+        return res.status(400).json({ message: "Invalid trackID in URL parameter. Must be a single String of 12 bytes or a string of 24 hex characters" }); 
     }
+    res.set('content-type', 'audio/mp3');
+    res.set('accept-ranges', 'bytes');
+    let bucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db, {
+        bucketName: "tracks"
+    });
+    let downloadStream = bucket.openDownloadStream(trackID);
+    downloadStream.on('data', (chunk) => {
+        res.write(chunk);
+    });
+    downloadStream.on('error', () => {
+        res.sendStatus(404);
+    });
+    downloadStream.on('end', () => {
+        res.end();
+    });
 }
 
 const fetchAllSoundTracks = async (req, res) => {
@@ -281,8 +275,13 @@ const fetchAllSoundTracks = async (req, res) => {
                 const subPath = "/track/";
                 const baseUrl = host + subPath;
                 data.forEach(item => {
-                    const soundTrackUrl = baseUrl + item._id;
-                    soundTracks.push(soundTrackUrl);
+                    let trackUrl = baseUrl + item._id;
+                    let trackName = item.filename;
+                    let soundDetails = {
+                        'name': trackName,
+                        'url': trackUrl
+                    };
+                    soundTracks.push(soundDetails);
                 }).then(() => {
                     res.status(200).json({
                         "message": soundTracks
